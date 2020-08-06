@@ -3,9 +3,8 @@ import Product from '../models/product.model';
 import GeneralService from '../services/generalService';
 import { OK, INTERNAL_SERVER_ERROR, CONTINUE, BAD_REQUEST, NOT_FOUND } from 'http-status-codes';
 import CartService from '../services/cart';
-import iterableArray from '../../common/iterableArray';
 import { ICart, ICartDetails } from "../models/cart.model";
-
+import async from 'async';
 
 export default class PaymentService extends GeneralService {
     public static async addPayment(payment: IPaymentValidator): Promise<{ status: number, details: string }> {
@@ -128,9 +127,8 @@ export default class PaymentService extends GeneralService {
                 throw new Error(detailsCart);
             }
             const cartDetailsProducts = (cart as ICart).products;
-            const iterableCartDetails= await iterableArray<ICartDetails>(cartDetailsProducts);
-            let cartDetail:ICartDetails| undefined;
-            for await (cartDetail of iterableCartDetails) {
+
+            async.each(cartDetailsProducts,async cartDetail=>{
                 const productId = (cartDetail as ICartDetails).productId;
                 const product = await Product.findById(productId);
                 if (!product) {
@@ -139,7 +137,7 @@ export default class PaymentService extends GeneralService {
                 }
                 product.amount -= (cartDetail as ICartDetails).amountBuying;
                 await product.save();
-            }
+            })
             status = CONTINUE;
             details = "succeed to update";
         } catch (ex) {

@@ -3,9 +3,9 @@ import Services from "../db/startup/dbServices";
 import GeneralRoute from './generalRoute.route';
 import authMiddlware from "./middlewares/auth.middleware";
 import adminMiddleware from "./middlewares/admin.middleware";
-import iterableArray from '../common/iterableArray';
 import { OK, INTERNAL_SERVER_ERROR } from 'http-status-codes';
 import { IDetailedProduct } from "../db/services/product";
+import async from 'async';
 
 const { ProductService } = Services;
 
@@ -47,9 +47,7 @@ export default class ProductRoute extends GeneralRoute {
     getDetailedProducts = async (req: Request, res: Response) => {
         const { status, details, detailedProducts } = await ProductService.getDetailedProducts();
         if (!detailedProducts) return res.status(status).send({ status, details });
-        let detailedProduct;
-        const detailedAvgProducts = [];
-        for await (detailedProduct of await iterableArray(detailedProducts)) {
+        const detailedAvgProducts = async.map(await detailedProducts, async detailedProduct => {
             const {
                 status: statusChecking,
                 details: detailsChecking,
@@ -58,12 +56,12 @@ export default class ProductRoute extends GeneralRoute {
                 status: statusChecking,
                 details: detailsChecking
             })
-            detailedProduct = {
-                ...detailedProduct,
+            const avgRankedProduct = {
+                detailedProduct,
                 avgRank
             }
-            detailedAvgProducts.push(detailedProduct);
-        }
+            return avgRankedProduct;
+        })
         res.send({
             status,
             details,

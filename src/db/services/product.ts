@@ -1,12 +1,21 @@
 
 import { ICategory } from '../models/category.model';
 import { IUser } from '../models/user.model';
-import iterableArray from '../../common/iterableArray';
 import Comment, { IComment } from '../models/comment.model';
 import Product, { IProduct, validateProduct, IProductInput } from "../models/product.model";
 import { OK, INTERNAL_SERVER_ERROR, CONTINUE, BAD_REQUEST, NOT_FOUND } from 'http-status-codes';
 import GeneralService from './generalService';
-
+import async from 'async';
+export interface IAvgRankedProduct {
+    _id: any;
+    category: ICategory;
+    admin: IUser;
+    name: string;
+    price_for_each: number;
+    amount: number;
+    image_url: string;
+    avgRank: number;
+}
 export interface IDetailedProduct {
     _id: any;
     category: ICategory;
@@ -105,34 +114,36 @@ export default class ProductService extends GeneralService {
             details
         }
     }
-    public static async getDetailedProducts(): Promise<{ status: number, details: string, detailedProducts: IDetailedProduct[] }> {
+    public static async getDetailedProducts() {
         let status: number = INTERNAL_SERVER_ERROR;
         let details: string = "";
-        const detailedProducts: IDetailedProduct[] = [];
         try {
             const products = await Product.find();
             if (!products.length) {
                 status = NOT_FOUND;
                 throw new Error("not found products into db")
             }
-            // tslint:disable-next-line: prefer-const
-            for await (let product of await iterableArray<IProduct>(products)) {
+            const detailedProducts = async.map(products, async product => {
                 const { status: productStatus, details: detailedProductStatus, detailedProduct } = await this.getDetailedProductById((product as IProduct)._id);
                 if (productStatus !== OK) {
                     status = productStatus;
                     throw new Error(detailedProductStatus);
                 }
-                detailedProducts.push((detailedProduct as IDetailedProduct));
-            }
+                return (detailedProduct as IDetailedProduct);
+            })
+
             status = OK;
             details = "succeeed to find";
+            return {
+                status,
+                details,
+                detailedProducts
+            }
         } catch (ex) {
-            details = (ex as Error).message;
-        }
-        return {
-            status,
-            details,
-            detailedProducts
+            return {
+                status,
+                details: (ex as Error).message,
+            }
         }
     }
     public static async updateProductDetails(productId: string, detailsToUpdate: object)
@@ -159,7 +170,7 @@ export default class ProductService extends GeneralService {
             details
         }
     }
-    public static async  getAvgRankForEachProduct(id: string)
+    public static async getAvgRankForEachProduct(id: string)
         : Promise<{ status: number, details?: string, avgRank?: number }> {
         let status: number = INTERNAL_SERVER_ERROR;
         let details: string = "";
@@ -175,9 +186,10 @@ export default class ProductService extends GeneralService {
             }
             let avgRank = 0;
             // tslint:disable-next-line: prefer-const
-            for await (let comment of await iterableArray<IComment>(comments)) {
+            async.each(comments, async comment=>{
                 avgRank += (comment as IComment).rank;
-            }
+            })
+
             avgRank = avgRank / comments.length;
             status = OK;
             return {
